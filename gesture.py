@@ -11,8 +11,6 @@ import string
 import cPickle as p
 from PIL import Image,ImageDraw,ImageFont
 
-aaaa = 0
-
 BATCH_SIZE = 1
 LEN_SEQ = 10
 
@@ -46,13 +44,15 @@ def readData(Filename, data_shape):
     pic.sort()
     a = 0
     for i in range(len(pic)-1):
-        prev = cv2.imread(pic[i], cv2.IMREAD_GRAYSCALE)
-	prev = cv2.resize(prev, (data_shape[2], data_shape[1]/10))
+        prev = cv2.imread(pic[i])
+	prev = cv2.resize(prev, (320, 240))
+	prev = cv2.cvtColor(prev, cv2.COLOR_RGB2GRAY)
 	#prev = np.multiply(prev, 1/255.0)
         #print prev[156][0:100]
 
-        cur = cv2.imread(pic[i+1], cv2.IMREAD_GRAYSCALE)
-	cur = cv2.resize(cur, (data_shape[2], data_shape[1]/10))
+        cur = cv2.imread(pic[i+1])
+	cur = cv2.resize(cur, (320, 240))
+	cur = cv2.cvtColor(cur, cv2.COLOR_RGB2GRAY)
 	#cur = np.multiply(cur, 1/255.0)
 	#print cur.shape
         #print cur[156][0:100]
@@ -60,26 +60,59 @@ def readData(Filename, data_shape):
         flow  = cv2.calcOpticalFlowFarneback(prev, cur, 0.702, 5, 10, 2, 7, 1.5, cv2.OPTFLOW_FARNEBACK_GAUSSIAN)
 	#flow = np.array(flow)
 	#flow = np.multiply(flow, 255)
-	array_bound = np.ones((data_shape[2], data_shape[1]/10, 2), dtype=int)*20
-	flow_img = 255*((flow)+array_bound)/(2*20)
-        flow_img = np.uint8(flow_img)
-	#aaaa += 1
-	#flow = np.multiply(flow_img, 1/255.0)
-	
-	flow_1 = flow_img.transpose((2,0,1))
-	#cv2.imwrite('./flow/flow-'+str(a)+'.jpg',flow_1[0,...])
-	flow_1 = flow_1.tolist()
-	pic_x.append(flow_1[0])
-	pic_y.append(flow_1[1])
-	a += 1
-    
+	#flow = cv2.resize(flow, (data_shape[2], data_shape[1]/10))
+	#array_bound = np.ones((data_shape[2], data_shape[1]/10, 2), dtype=int)*20
+#	array_bound = np.ones((256, 256, 2), dtype=int)*20
+#	flow_img = 255*((flow)+array_bound)/(2*20)
+#       flow_img = np.uint8(flow_img)
+#	flow_img = cv2.resize(flow_img, (data_shape[2], data_shape[1]/10))
+#	#aaaa += 1
+#	#flow = np.multiply(flow_img, 1/255.0)
+#	
+#	flow_1 = flow_img.transpose((2,0,1))
+#	cv2.imwrite('./flow/flow-'+str(a).zfill(4)+'.jpg',flow_1[0,...])
+#	flow_1 = np.multiply(flow_1, 1/255.0)
+#	flow_1 = flow_1.tolist()
+#	pic_x.append(flow_1[0])
+#	pic_y.append(flow_1[1])
+#	a += 1
+        
+	flow_x = flow[..., 0]
+	flow_y = flow[..., 1]
+        
+	flow_x = cv2.resize(flow_x, (data_shape[2], data_shape[1]/10))
+	flow_y = cv2.resize(flow_y, (data_shape[2], data_shape[1]/10))
+
+	array_bound = np.ones((data_shape[2], data_shape[1]/10), dtype=int)*20
+	flow_x_img = 255*((flow_x) + array_bound)/(2*20)
+	flow_y_img = 255*((flow_y) + array_bound)/(2*20)
+        cv2.imwrite('./flow/flow-'+str(a).zfill(4)+'.jpg', flow_x_img)
+        a += 1
+
+	flow_x_img = np.multiply(flow_x_img, 1/255.0)
+	flow_y_img = np.multiply(flow_y_img, 1/255.0)
+
+        flow_x_list = flow_x_img.tolist()
+	flow_y_list = flow_y_img.tolist()
+
+        pic_x.append(flow_x_list)
+	pic_y.append(flow_y_list)
+
     for j in range(len(pic_x)-LEN_SEQ):
         data_1_1 = []
         for i in range(LEN_SEQ):
-	    idx = j+i
+            idx = j+i
             data_1_1.append([pic_x[idx], pic_y[idx]]) 
         data_2.append(0)
         data_1.append(data_1_1)
+#   le = len(pic_x)/LEN_SEQ
+#   for j in range(2):
+#       data_1_1 = []
+#       for i in range(LEN_SEQ):
+#           ret = random.randint(i*le, (i+1)*le-1)
+#           data_1_1.append([pic_x[ret], pic_y[ret]])
+#       data_2.append(0)
+#       data_1.append(data_1_1)
     return (data_1, data_2)
 
 def readImg(Filename, data_shape):
@@ -154,7 +187,7 @@ if __name__ == '__main__':
     num_label = 5
     seq_len = LEN_SEQ
 
-    devs = [mx.context.gpu(0)]
+    devs = [mx.context.cpu(0)]
 
     test_file = './1'
 
@@ -165,7 +198,7 @@ if __name__ == '__main__':
     data_val = GestureIter(test_file, batch_size, seq_len, data_shape, init_states)
     print data_val.provide_data, data_val.provide_label
 
-    model = mx.model.FeedForward.load("./model/cnn_lstm", epoch=500, ctx=devs)
+    model = mx.model.FeedForward.load("./model/cnn_concat", epoch=500, ctx=devs)
 
     internels = model.symbol.get_internals()
 
